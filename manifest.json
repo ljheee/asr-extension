@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "豆包 ASR",
+  "version": "1.0",
+  "description": "语音识别浮窗，支持任意页面语音输入",
+  "permissions": ["cookies", "storage"],
+  "host_permissions": [
+    "https://*.doubao.com/*",
+    "wss://ws-samantha.doubao.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "豆包 ASR"
+  }
+}

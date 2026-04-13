@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>豆包 ASR 设置</title>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    background: #0f0f0f; color: #e0e0e0;
+    padding: 40px; max-width: 480px;
+  }
+  h2 { font-size: 18px; font-weight: 500; margin-bottom: 24px; color: #ccc; }
+  label { font-size: 13px; color: #888; display: block; margin-bottom: 8px; }
+  .row { display: flex; gap: 8px; align-items: center; margin-bottom: 24px; }
+  .checkbox-row { display: flex; gap: 16px; align-items: center; margin-bottom: 8px; }
+  .checkbox-row label { margin: 0; color: #ccc; display: flex; gap: 6px; align-items: center; }
+  input[type=text] {
+    background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+    color: #ccc; padding: 8px 12px; font-size: 14px; width: 80px; outline: none;
+  }
+  input[type=text]:focus { border-color: #555; }
+  input[type=checkbox] { accent-color: #3a7bd5; width: 14px; height: 14px; }
+  button {
+    background: #3a7bd5; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 20px; font-size: 14px; cursor: pointer;
+  }
+  button:hover { background: #2d6bc4; }
+  #saved { font-size: 12px; color: #27ae60; margin-left: 12px; opacity: 0; transition: opacity 0.3s; }
+  .hint { font-size: 11px; color: #555; margin-top: 4px; }
+</style>
+</head>
+<body>
+<h2>豆包 ASR 设置</h2>
+
+<label>光标模式快捷键（按住触发，松开停止）</label>
+<div class="checkbox-row">
+  <label><input type="checkbox" id="mod-ctrl"> Ctrl</label>
+  <label><input type="checkbox" id="mod-alt"> Alt</label>
+  <label><input type="checkbox" id="mod-shift"> Shift</label>
+</div>
+<div class="row">
+  <span style="font-size:13px;color:#666">+ 额外按键（可选）</span>
+  <input type="text" id="extra-key" maxlength="1" placeholder="留空">
+</div>
+<p class="hint">默认：Alt + 1（按住触发，松开 1 停止）</p>
+
+<button id="save">保存</button>
+<span id="saved">已保存</span>
+
+<script src="options.js"></script>
+</body>
+</html>
