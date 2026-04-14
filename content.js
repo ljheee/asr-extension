@@ -1,7 +1,7 @@
 // content.js — 注入浮窗，处理两种模式
 // WS 连接由 background.js 维护，PCM 数据通过消息传递
 
-const DEFAULT_HOTKEY = { alt: true, shift: false, key: '1' }; // Alt+1
+const DEFAULT_HOTKEY = { alt: false, shift: true, ctrl: true, key: '1' }; // Ctrl+Shift+1
 
 let hotkey = { ...DEFAULT_HOTKEY };
 let mode = 'panel';
@@ -83,7 +83,7 @@ function toggleMode() {
     toggle.style.borderColor = '#3a7bd5';
     btn.style.opacity = '0.4';
     btn.style.pointerEvents = 'none';
-    setStatus('光标模式 · 按住 Alt+1 说话', '#3a7bd5');
+    setStatus('光标模式 · 按住 Ctrl+Shift+1 说话', '#3a7bd5');
   } else {
     toggle.textContent = '浮窗';
     toggle.style.color = '#555';
@@ -129,6 +129,7 @@ document.addEventListener('keyup', (e) => {
 
 function matchHotkey(e) {
   if (hotkey.alt && !e.altKey) return false;
+  if (!hotkey.alt && e.altKey) return false;
   if (hotkey.shift && !e.shiftKey) return false;
   if (hotkey.ctrl && !e.ctrlKey) return false;
   const triggerKey = hotkey.key || '1';
@@ -305,16 +306,13 @@ function replaceInserted(el, oldText, newText, savedRange) {
       el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: newText }));
     }
   } else if (el.isContentEditable) {
-    // 不动焦点和 selection，直接操作
-    // 先删旧文字
-    if (oldText.length > 0) {
-      document.execCommand('delete', false, null); // 如果有选中就删选中
-      // 用 deleteContentBackward 逐字删
+    const sel = window.getSelection();
+    if (sel.rangeCount && oldText.length > 0) {
+      // 向左选中上次插入的字符，一次性替换
       for (let i = 0; i < oldText.length; i++) {
-        document.execCommand('delete', false, null);
+        sel.modify('extend', 'backward', 'character');
       }
     }
-    // 插入新文字
     document.execCommand('insertText', false, newText);
   }
 }

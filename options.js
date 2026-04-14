@@ -1,4 +1,4 @@
-const DEFAULT = { ctrl: false, alt: true, shift: false, key: '1' };
+const DEFAULT = { ctrl: true, alt: false, shift: true, key: '1' };
 
 chrome.storage.sync.get(['hotkey'], (res) => {
   const hk = res.hotkey || DEFAULT;
