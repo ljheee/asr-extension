@@ -10,6 +10,7 @@ let lastFocusedEl = null;
 let lastSavedRange = null; // contentEditable 的光标位置
 let lastInsertedText = ''; // 上次插入的临时文字，用于回删替换
 let isRecording = false;
+let isClosing = false;
 let currentTriggerMode = 'panel';
 
 chrome.storage.sync.get(['hotkey'], (res) => {
@@ -60,11 +61,11 @@ function injectPanel() {
   btn.addEventListener('mousedown', (e) => { e.preventDefault(); startASR('panel'); });
   btn.addEventListener('mouseup', stopASR);
 
-  document.getElementById('asr-mode-toggle').addEventListener('click', toggleMode);
-  document.getElementById('asr-options').addEventListener('click', () => {
+  document.getElementById('asr-mode-toggle').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
+  document.getElementById('asr-options').addEventListener('click', (e) => { e.stopPropagation();
     chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' });
   });
-  document.getElementById('asr-close').addEventListener('click', () => {
+  document.getElementById('asr-close').addEventListener('click', (e) => { e.stopPropagation();
     stopASR();
     panel.remove();
   });
@@ -100,24 +101,21 @@ document.addEventListener('keydown', (e) => {
   if (matchHotkey(e)) {
     e.preventDefault();
     lastFocusedEl = document.activeElement;
-    // contentEditable 额外保存当前光标 Range
     if (lastFocusedEl?.isContentEditable) {
       const sel = window.getSelection();
       lastSavedRange = sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
     } else {
       lastSavedRange = null;
     }
-    console.log('[ASR] lastFocusedEl:', lastFocusedEl?.tagName, lastFocusedEl?.isContentEditable, lastFocusedEl);
-    console.log('[ASR] lastSavedRange:', lastSavedRange, 'sel rangeCount:', window.getSelection().rangeCount);
     startASR('cursor');
   }
-});
+}, true); // capture 模式，在事件到达目标前拦截
 
 document.addEventListener('keyup', (e) => {
   if (mode !== 'cursor' || !isRecording) return;
+  console.log('[ASR keyup]', e.key, e.code, e.ctrlKey, e.shiftKey);
   const triggerKey = hotkey.key || '1';
-  if (e.key.toLowerCase() === triggerKey.toLowerCase()) {
-    // 松开时编辑器还在焦点，先记录当前焦点和光标
+  if (e.code === 'Digit1' || e.key.toLowerCase() === triggerKey.toLowerCase()) {
     lastFocusedEl = document.activeElement;
     if (lastFocusedEl?.isContentEditable) {
       const sel = window.getSelection();
@@ -125,7 +123,7 @@ document.addEventListener('keyup', (e) => {
     }
     stopASR();
   }
-});
+}, true); // capture 模式
 
 function matchHotkey(e) {
   if (hotkey.alt && !e.altKey) return false;
@@ -133,13 +131,17 @@ function matchHotkey(e) {
   if (hotkey.shift && !e.shiftKey) return false;
   if (hotkey.ctrl && !e.ctrlKey) return false;
   const triggerKey = hotkey.key || '1';
-  if (e.key.toLowerCase() !== triggerKey.toLowerCase()) return false;
+  // 用 e.code 匹配物理键位，不受修饰键影响
+  const expectedCode = triggerKey >= '0' && triggerKey <= '9'
+    ? 'Digit' + triggerKey
+    : 'Key' + triggerKey.toUpperCase();
+  if (e.code !== expectedCode && e.key.toLowerCase() !== triggerKey.toLowerCase()) return false;
   return true;
 }
 
 // ── ASR 核心 ─────────────────────────────────────
 async function startASR(triggerMode) {
-  if (isRecording) return;
+  if (isRecording || isClosing) return;
 
   const loggedIn = await new Promise(resolve => checkLogin(resolve));
   if (!loggedIn) return;
@@ -187,7 +189,7 @@ chrome.runtime.onMessage.addListener((msg) => {
       handleASRMessage(msg.data);
     }
     if (msg.event === 'error') {
-      setStatus('WS 错误', '#e74c3c'); isRecording = false; resetBtn();
+      setStatus('WS 错误', '#e74c3c'); isRecording = false; isClosing = false; resetBtn();
     }
     if (msg.event === 'close') {
       setStatus(msg.code === 1000
@@ -195,6 +197,7 @@ chrome.runtime.onMessage.addListener((msg) => {
         : `异常断开 ${msg.code}`,
         msg.code === 1000 ? '#555' : '#e74c3c');
       isRecording = false;
+      isClosing = false;
     }
   }
 
@@ -272,6 +275,7 @@ function handleASRMessage(dataStr) {
 // ── 停止 ─────────────────────────────────────────
 function stopASR() {
   if (!isRecording) return;
+  isClosing = true;
   if (processor) { processor.disconnect(); processor = null; }
   if (audioCtx) { audioCtx.close(); audioCtx = null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
@@ -357,7 +361,11 @@ function initDrag() {
     dragging = true;
     const rect = panelEl.getBoundingClientRect();
     ox = e.clientX - rect.left; oy = e.clientY - rect.top;
-    panelEl.style.right = 'auto'; panelEl.style.bottom = 'auto';
+    // 先把当前位置固定为 left/top，再清掉 right/bottom
+    panelEl.style.left = rect.left + 'px';
+    panelEl.style.top = rect.top + 'px';
+    panelEl.style.right = 'auto';
+    panelEl.style.bottom = 'auto';
     e.preventDefault();
   });
   document.addEventListener('mousemove', (e) => {
