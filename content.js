@@ -28,10 +28,9 @@ function injectPanel() {
     background:#1a1a1a; border:1px solid #333; border-radius:16px;
     padding:16px; width:280px; box-shadow:0 8px 32px rgba(0,0,0,0.6);
     font-family:-apple-system,sans-serif; color:#e0e0e0;
-    user-select:none;
   `;
   panel.innerHTML = `
-    <div id="asr-drag" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:move">
+    <div id="asr-drag" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:move;user-select:none">
       <span style="font-size:12px;color:#666">⠿ 豆包 ASR</span>
       <div style="display:flex;gap:10px;align-items:center">
         <span id="asr-mode-toggle" title="切换模式" style="font-size:11px;color:#555;cursor:pointer;padding:2px 6px;border:1px solid #333;border-radius:4px">浮窗</span>
@@ -43,7 +42,7 @@ function injectPanel() {
     <button id="asr-btn" style="
       width:100%; height:52px; border-radius:12px; border:none;
       background:#2a2a2a; color:#aaa; font-size:14px; cursor:pointer;
-      transition:all 0.15s; outline:none; user-select:none;
+      transition:all 0.15s; outline:none;
     ">按住说话</button>
 
     <div id="asr-result" style="
@@ -450,6 +449,26 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
-// ── 启动 ─────────────────────────────────────────
-injectPanel();
-checkLogin();
+// ── 图标点击切换浮窗 ─────────────────────────────
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true });
+    return true;
+  }
+  if (msg.type === 'TOGGLE_PANEL') {
+    const panel = document.getElementById('asr-ext-panel');
+    if (panel) {
+      // 已存在：切换显示/隐藏
+      if (panel.style.display === 'none') {
+        panel.style.display = '';
+      } else {
+        stopASR();
+        panel.style.display = 'none';
+      }
+    } else {
+      // 首次：注入并检查登录
+      injectPanel();
+      checkLogin();
+    }
+  }
+});

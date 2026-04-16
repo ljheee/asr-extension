@@ -72,6 +72,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'OPEN_DOUBAO') { chrome.tabs.create({ url: 'https://www.doubao.com' }); }
 });
 
+// 点击扩展图标，切换当前 tab 的浮窗显示/隐藏
+chrome.action.onClicked.addListener((tab) => {
+  // 确保豆包 tab 存在且 content script 已注入
+  ensureDoubaoTab().then(() => {
+    chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_PANEL' });
+  });
+});
+
+async function ensureDoubaoTab() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ url: 'https://www.doubao.com/*' }, (tabs) => {
+      if (tabs.length > 0) {
+        // 已有豆包 tab，检查 content script 是否已注入
+        chrome.tabs.sendMessage(tabs[0].id, { type: 'PING' }, (res) => {
+          if (chrome.runtime.lastError || !res) {
+            // content script 未注入，刷新后等待加载完成
+            waitForTabLoad(tabs[0].id, resolve);
+            chrome.tabs.reload(tabs[0].id);
+          } else {
+            resolve(); // 已注入，直接用
+          }
+        });
+      } else {
+        // 没有豆包 tab，后台静默创建
+        chrome.tabs.create({ url: 'https://www.doubao.com', active: false }, (newTab) => {
+          waitForTabLoad(newTab.id, resolve);
+        });
+      }
+    });
+  });
+}
+
+function waitForTabLoad(tabId, callback) {
+  const listener = (id, info) => {
+    if (id === tabId && info.status === 'complete') {
+      chrome.tabs.onUpdated.removeListener(listener);
+      setTimeout(callback, 500); // 等 content script 执行完
+    }
+  };
+  chrome.tabs.onUpdated.addListener(listener);
+}
+
 // 监听豆包 Cookie 变化，通知所有 tab
 chrome.cookies.onChanged.addListener((changeInfo) => {
   const c = changeInfo.cookie;
