@@ -12,6 +12,7 @@ let lastInsertedText = ''; // 上次插入的临时文字，用于回删替换
 let isRecording = false;
 let isClosing = false;
 let currentTriggerMode = 'panel';
+let startASRTimer = null; // 防抖：300ms 内松开则取消
 
 chrome.storage.sync.get(['hotkey'], (res) => {
   if (res.hotkey) hotkey = res.hotkey;
@@ -57,7 +58,7 @@ function injectPanel() {
   document.body.appendChild(panel);
 
   const btn = document.getElementById('asr-btn');
-  btn.addEventListener('mousedown', (e) => { e.preventDefault(); startASR('panel'); });
+  btn.addEventListener('mousedown', (e) => { e.preventDefault(); scheduleASR('panel'); });
   btn.addEventListener('mouseup', stopASR);
 
   document.getElementById('asr-mode-toggle').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
@@ -106,7 +107,7 @@ document.addEventListener('keydown', (e) => {
     } else {
       lastSavedRange = null;
     }
-    startASR('cursor');
+    scheduleASR('cursor');
   }
 }, true); // capture 模式，在事件到达目标前拦截
 
@@ -128,7 +129,9 @@ function matchHotkey(e) {
   if (hotkey.alt && !e.altKey) return false;
   if (!hotkey.alt && e.altKey) return false;
   if (hotkey.shift && !e.shiftKey) return false;
+  if (!hotkey.shift && e.shiftKey) return false;
   if (hotkey.ctrl && !e.ctrlKey) return false;
+  if (!hotkey.ctrl && e.ctrlKey) return false;
   const triggerKey = hotkey.key || '1';
   // 用 e.code 匹配物理键位，不受修饰键影响
   const expectedCode = triggerKey >= '0' && triggerKey <= '9'
@@ -139,6 +142,18 @@ function matchHotkey(e) {
 }
 
 // ── ASR 核心 ─────────────────────────────────────
+function scheduleASR(triggerMode) {
+  if (startASRTimer) return;
+  // 立即给按钮红色反馈
+  const btn = document.getElementById('asr-btn');
+  if (btn) { btn.style.background = '#c0392b'; btn.style.color = '#fff'; btn.textContent = '录音中…'; }
+  setStatus('准备中…', '#f39c12');
+  startASRTimer = setTimeout(() => {
+    startASRTimer = null;
+    startASR(triggerMode);
+  }, 300);
+}
+
 async function startASR(triggerMode) {
   if (isRecording || isClosing) return;
 
@@ -181,6 +196,15 @@ chrome.runtime.onMessage.addListener((msg) => {
       isRecording = false; resetBtn(); return;
     }
     if (msg.event === 'open') {
+      if (isClosing) {
+        // mouseup 比 WS open 先到，直接关掉
+        chrome.runtime.sendMessage({ type: 'WS_CLOSE' });
+        isRecording = false;
+        isClosing = false;
+        resetBtn();
+        setStatus(mode === 'cursor' ? '就绪 · 光标模式' : '就绪 · 浮窗模式', '#555');
+        return;
+      }
       setStatus(currentTriggerMode === 'cursor' ? '说话中… (松开Alt/Shift停止)' : '说话中…', '#27ae60');
       startMic();
     }
@@ -197,6 +221,7 @@ chrome.runtime.onMessage.addListener((msg) => {
         msg.code === 1000 ? '#555' : '#e74c3c');
       isRecording = false;
       isClosing = false;
+      resetBtn();
     }
   }
 
@@ -273,6 +298,14 @@ function handleASRMessage(dataStr) {
 
 // ── 停止 ─────────────────────────────────────────
 function stopASR() {
+  // 防抖期内松开：取消定时器，恢复按钮
+  if (startASRTimer) {
+    clearTimeout(startASRTimer);
+    startASRTimer = null;
+    resetBtn();
+    setStatus(mode === 'cursor' ? '就绪 · 光标模式' : '就绪 · 浮窗模式', '#555');
+    return;
+  }
   if (!isRecording) return;
   isClosing = true;
   if (processor) { processor.disconnect(); processor = null; }
